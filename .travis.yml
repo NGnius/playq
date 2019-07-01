@@ -1,0 +1,6 @@
+dist: xenial
+language: go
+go:
+  - 1.12.x
+install: sh ./scripts/build.sh
+# script: sh ./scripts/build.sh
