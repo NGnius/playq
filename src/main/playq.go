@@ -8,7 +8,7 @@ import (
     "../playback"
 )
 
-var ABOUT_STRING string = `PlayQ v0.0.1 for StreamQ
+var ABOUT_STRING string = `playq v0.0.1 for StreamQ
 Developed by NGnius (Graham Littlewood)
 ---------------------------------------`
 
