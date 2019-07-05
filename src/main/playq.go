@@ -3,14 +3,13 @@ package main
 import (
     "fmt"
     // "flag"
-    "../controller"
-    "../monitor"
-    "../playback"
+    "./controller"
+    "./monitor"
+    "./playback"
 )
 
-var ABOUT_STRING string = `playq v0.0.1 for StreamQ
-Developed by NGnius (Graham Littlewood)
----------------------------------------`
+var ABOUT_STRING string = `playq v0.0.1 for streamq
+Developed by NGnius (Graham)`
 
 func main() {
   fmt.Println(ABOUT_STRING)

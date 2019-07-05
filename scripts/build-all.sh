@@ -1,6 +1,6 @@
 #!/bin/bash
-target_systems=("linux" "windows")
-target_architectures=("amd64" "amd64")
+target_systems=( "linux" "windows" )
+target_architectures=( "amd64" "amd64" )
 # TODO: Fix oto (dependency?) errors for other builds
 
 if [ -d ./bin ]

@@ -22,7 +22,7 @@ func New(qcode string) Monitor{
   streamqapi.InitAPI("http://localhost:5000")
   q, apiErr := streamqapi.NewSoundQueue(qcode)
   if apiErr != nil {
-    fmt.Println("Monitor may not have started properly due to following API error")
+    fmt.Println("Monitor may not have started properly due to API error:")
     fmt.Println(apiErr)
   }
   return Monitor{ActiveQueue:q, EventChannel:make(chan string, 1), ControlChannel:make(chan string), discardNextNext:false, discardNextBadfile:false}
@@ -33,6 +33,7 @@ func (m Monitor) Start(end chan int) {
 }
 
 func (m Monitor) Run(end chan int) {
+  // start up duties
   m.discardNextNext = true
   switch m.ActiveQueue.Index {
   case -1:
@@ -55,14 +56,38 @@ func (m Monitor) Run(end chan int) {
       args := strings.Split(msg, " ")
       switch args[0] {
       case "end", "shutdown":
+        // send terminate signal to player
         m.PlaybackControlChannel <- "end"
       case "next":
-        m.discardNextNext = true
+        m.discardNextNext = true // next next event will be caused by this
         m.PlaybackControlChannel <- "next"
         m.playNext()
         go m.preloadNext()
         m.EventChannel <- ""
+      case "add":
+        // add file or files
+        fileArgs := strings.Split(msg, "\n")
+        if len(fileArgs) == 1{
+          m.EventChannel <- "Missing add target"
+        } else {
+          failed := false
+          addLoop: for _, elem := range fileArgs[1:] {
+            _, addErr := m.ActiveQueue.AddFilePath(elem)
+            if addErr != nil {
+              fmt.Println(addErr)
+              m.EventChannel <- "Failed at "+elem
+              failed = true
+              break addLoop
+            }
+          }
+          if !failed {
+            fmt.Print("Added ")
+            fmt.Print((len(fileArgs)-1))
+            m.EventChannel <- " file(s)"
+          }
+        }
       case "pause", "play", "toggle":
+        // commands which only involve the player
         m.PlaybackControlChannel <- args[0]
         m.EventChannel <- ""
       default:
@@ -87,6 +112,7 @@ func (m Monitor) Run(end chan int) {
           go m.preloadNext()
         }
       case "end":
+        // when player shutdowns, trigger shutdown here too
         m.EventChannel <- "end"
         break monitorLoop
       }

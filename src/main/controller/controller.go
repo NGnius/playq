@@ -53,6 +53,10 @@ func (c CommandLineInterface) Run(end chan int) {
         } else {
           fmt.Println("Usage: prompt NEW_PROMPT")
         }
+      case "add":
+        msg := "add \n"
+        msg += strings.Trim(text[4:], " ")
+        c.sendAndPrintResp(msg)
       case "help":
         fmt.Println("Commands: "+strings.Join(Commands, ", "))
         fmt.Println("Extra commands: test, end, prompt, help")
@@ -65,11 +69,7 @@ func (c CommandLineInterface) Run(end chan int) {
         return ""
         }(args[0]):
         if args[0] != "" {
-          c.MonitorControlChannel <- text
-          resp := <- c.MonitorEventChannel
-          if resp != "" {
-            fmt.Println(resp)
-          }
+          c.sendAndPrintResp(text)
         }
       default:
         fmt.Println("Invalid command '"+args[0]+"'")
@@ -79,4 +79,12 @@ func (c CommandLineInterface) Run(end chan int) {
   }
   fmt.Println("Controller end")
   end <- 0
+}
+
+func (c CommandLineInterface) sendAndPrintResp(msg string){
+  c.MonitorControlChannel <- msg
+  resp := <- c.MonitorEventChannel
+  if resp != "" {
+    fmt.Println(resp)
+  }
 }

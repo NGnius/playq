@@ -15,8 +15,10 @@ var api API
 var fileGetUrl string = "/api/file/"
 var fileUploadPostUrl string = "/api/file/"
 var soundGetUrl string = "/api/sound/"
-var soundNewUrl string = "/api/sound/"
+var soundNewUrl string = "/api/sound/new"
+var soundMetadataUrl string ="/api/sound/?refresh=true"
 var queueGetUrl string = "/api/queue/"
+var queueNewUrl string = "/api/queue/new"
 var queueNextUrl string = "/api/queue/next"
 var queuePreviousUrl string = "/api/queue/previous"
 var queueNowUrl string = "/api/queue/now"
@@ -87,9 +89,35 @@ func (this API) newSound() (Sound, error) {
   return s, nil
 }
 
+func (this API) refreshSound(code string) (Sound, error) {
+  var s Sound
+  body, respErr := this._getBytes(this.Base+soundMetadataUrl+"&code="+code)
+  if respErr != nil {
+    return s, respErr
+  }
+  unmarsharlErr := json.Unmarshal(body, &s)
+  if unmarsharlErr != nil {
+    return s, unmarsharlErr
+  }
+  return s, nil
+}
+
 func (this API) getQueue(code string) (SoundQueue, error) {
   var q SoundQueue
   body, respErr := this._getBytes(this.Base+queueGetUrl+"?code="+code)
+  if respErr != nil {
+    return q, respErr
+  }
+  unmarsharlErr := json.Unmarshal(body, &q)
+  if unmarsharlErr != nil {
+    return q, unmarsharlErr
+  }
+  return q, nil
+}
+
+func (this API) newQueue() (SoundQueue, error) {
+  var q SoundQueue
+  body, respErr := this._getBytes(this.Base+queueNewUrl)
   if respErr != nil {
     return q, respErr
   }

@@ -13,11 +13,27 @@ type Sound struct {
 }
 
 /*
-  Sound constructor
+  Sound constructors
   Retrieves Sound info from server
 */
 func NewSound(code string) (Sound, error) {
   return api.getSound(code)
+}
+
+func CreateSound() (Sound, error) {
+  return api.newSound()
+}
+
+/*
+  Refresh metadata from API server
+*/
+func (sound *Sound) Refresh() (error) {
+  nSound, refreshErr := api.refreshSound(sound.Code)
+  if refreshErr != nil {
+    return refreshErr
+  }
+  sound.Metadata = nSound.Metadata
+  return nil
 }
 
 /*
@@ -57,12 +73,24 @@ type SoundQueue struct {
 }
 
 /*
-  SoundQueue constructor
+  SoundQueue constructors
   Retrieves SoundQueue info from server
 */
 
-func NewSoundQueue(code string) (SoundQueue, error){
+func NewSoundQueue(code string) (SoundQueue, error) {
   return api.getQueue(code)
+}
+
+func CreateSoundQueue() (SoundQueue, error) {
+  return api.newQueue()
+}
+
+/*
+  Update values which an API call may have changed
+*/
+func (sq *SoundQueue) update(updatedSq SoundQueue) {
+  sq.Index = updatedSq.Index
+  sq.Items = updatedSq.Items
 }
 
 /*
@@ -96,8 +124,7 @@ func (sq *SoundQueue) GetNext() (Sound, error) {
     if apiErr != nil {
       return nextSound, apiErr
     }
-    sq.Index = updatedQueue.Index
-    sq.Items = updatedQueue.Items
+    sq.update(updatedQueue)
   }
   return sq.Now(), nil
 }
@@ -105,9 +132,55 @@ func (sq *SoundQueue) GetNext() (Sound, error) {
 /*
   Next song, without API sync/calls
 */
-func (sq SoundQueue) Next() (Sound) {
+func (sq *SoundQueue) Next() (Sound) {
   sq.Index++
   return sq.Now()
+}
+
+/*
+  Add song to end of queue
+*/
+func (sq *SoundQueue) Add(s Sound) (error) {
+  updatedSq, apiErr := api.queueAdd(sq.Code, s.Code)
+  if apiErr != nil {
+    return apiErr
+  }
+  sq.update(updatedSq)
+  return nil
+}
+
+/*
+  Create new sound, upload file and add to queue compound method
+*/
+func (sq *SoundQueue) AddFile(file *os.File) (Sound, error) {
+  nSound, nSoundErr := CreateSound()
+  if nSoundErr != nil {
+    return nSound, nSoundErr
+  }
+  uploadErr := api.uploadFile(nSound.Code, file)
+  if uploadErr != nil {
+    return nSound, uploadErr
+  }
+  rSoundErr := nSound.Refresh()
+  if rSoundErr != nil {
+    return nSound, rSoundErr
+  }
+  return nSound, sq.Add(nSound)
+}
+
+/*
+  Add file to queue from filepath
+*/
+func (sq *SoundQueue) AddFilePath(path string) (Sound, error) {
+  file, fileErr := os.Open(path)
+  nSound, aSoundErr := sq.AddFile(file)
+  if fileErr != nil {
+    return nSound, fileErr
+  }
+  if aSoundErr != nil {
+    return nSound, aSoundErr
+  }
+  return nSound, nil
 }
 
 // end of Queue object
