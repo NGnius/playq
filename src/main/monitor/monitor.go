@@ -14,19 +14,37 @@ type Monitor struct {
   PlaybackEventChannel chan string
   PlaybackFileChannel chan *os.File
   ActiveQueue streamqapi.SoundQueue
+  IsAutostart bool
   discardNextNext bool
   discardNextBadfile bool
   isCompleted bool
 }
 
-func New(qcode string) Monitor{
+func New(q streamqapi.SoundQueue) Monitor {
+  return Monitor{ActiveQueue:q, EventChannel:make(chan string, 1), ControlChannel:make(chan string), IsAutostart:false,discardNextNext:false, discardNextBadfile:false, isCompleted:false}
+}
+
+func NewAndRetrieveQueue(qcode string) Monitor {
   streamqapi.InitAPI("http://localhost:5000")
   q, apiErr := streamqapi.NewSoundQueue(qcode)
   if apiErr != nil {
     fmt.Println("Monitor may not have started properly due to API error:")
     fmt.Println(apiErr)
   }
-  return Monitor{ActiveQueue:q, EventChannel:make(chan string, 1), ControlChannel:make(chan string), discardNextNext:false, discardNextBadfile:false, isCompleted:false}
+  return New(q)
+}
+
+func NewAndCreateQueue() Monitor {
+  streamqapi.InitAPI("http://localhost:5000")
+  q, apiErr := streamqapi.CreateSoundQueue()
+  if apiErr != nil {
+    fmt.Println("Monitor may not have started properly due to API error:")
+    fmt.Println(apiErr)
+  } else {
+    fmt.Print("Created new queue with code ")
+    fmt.Println(q.Code)
+  }
+  return New(q)
 }
 
 func (m Monitor) Start(end chan int) {
@@ -35,6 +53,9 @@ func (m Monitor) Start(end chan int) {
 
 func (m Monitor) Run(end chan int) {
   // start up duties
+  if !m.IsAutostart {
+    m.PlaybackControlChannel <- "pause"
+  }
   switch m.ActiveQueue.Index {
   case -1:
     m.discardNextNext = true

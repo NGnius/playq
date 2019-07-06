@@ -13,17 +13,16 @@ import (
 )
 
 type Playback struct {
-  filename string
   currentStream beep.Streamer
   currentFormat beep.SampleRate
-  isSpeakerInited bool
   FileChannel chan *os.File
   EventChannel chan string
   ControlChannel chan string
+  BufferedTime time.Duration
 }
 
 func New() Playback{
-  return Playback{FileChannel:make(chan *os.File, 1), EventChannel:make(chan string, 2), ControlChannel:make(chan string), isSpeakerInited:false}
+  return Playback{FileChannel:make(chan *os.File, 1), EventChannel:make(chan string, 2), ControlChannel:make(chan string), BufferedTime:time.Second/100}
 }
 
 func (p Playback) Start(end chan int) {
@@ -31,7 +30,8 @@ func (p Playback) Start(end chan int) {
 }
 
 func (p Playback) Run(end chan int) {
-  speakerLocked := false
+  isSpeakerLocked := false
+  isSpeakerInited := false
   songDone := make(chan bool, 1)
   playLoop: for {
     select {
@@ -40,16 +40,16 @@ func (p Playback) Run(end chan int) {
       nextStream, nextFormat, nextErr := decodeAudioFile( <- p.FileChannel)
       if nextErr == nil {
         p.currentStream = nextStream
-        if !p.isSpeakerInited /*|| nextFormat.SampleRate != p.currentFormat*/ {
-          speaker.Init(nextFormat.SampleRate, nextFormat.SampleRate.N(time.Second/100))
+        if !isSpeakerInited /*|| nextFormat.SampleRate != p.currentFormat*/ {
+          speaker.Init(nextFormat.SampleRate, nextFormat.SampleRate.N(p.BufferedTime))
           p.currentFormat = nextFormat.SampleRate
-          p.isSpeakerInited = true
+          isSpeakerInited = true
         } else {
-          if speakerLocked { speaker.Unlock() }
+          if isSpeakerLocked { speaker.Unlock() }
           speaker.Clear()
         }
         speaker.Play(beep.Seq(nextStream, beep.Callback(func(){songDone <- true})))
-        if speakerLocked { speaker.Lock() }
+        if isSpeakerLocked { speaker.Lock() }
       } else {
         p.EventChannel <- "badfile"
       }
@@ -58,31 +58,37 @@ func (p Playback) Run(end chan int) {
       case "next":
         songDone <- false
       case "toggle":
-        if speakerLocked {
-          speaker.Unlock()
-        } else {
-          speaker.Lock()
+        if isSpeakerInited {
+          if isSpeakerLocked {
+            speaker.Unlock()
+          } else {
+            speaker.Lock()
+          }
         }
-        speakerLocked = !speakerLocked
+        isSpeakerLocked = !isSpeakerLocked
       case "play":
-        if speakerLocked {
-          speaker.Unlock()
-          speakerLocked = false
+        if isSpeakerLocked {
+          if isSpeakerInited {
+            speaker.Unlock()
+          }
+          isSpeakerLocked = false
         }
       case "pause":
-        if ! speakerLocked {
-          speaker.Lock()
-          speakerLocked = true
+        if !isSpeakerLocked {
+          if isSpeakerInited {
+            speaker.Lock()
+          }
+          isSpeakerLocked = true
         }
       case "end", "stop", "close":
-        if speakerLocked { speaker.Unlock() }
+        if isSpeakerLocked && isSpeakerInited { speaker.Unlock() }
         speaker.Close()
         p.EventChannel <- "end"
         break playLoop
       case "clear":
-        if speakerLocked { speaker.Unlock() }
+        if isSpeakerLocked && isSpeakerInited { speaker.Unlock() }
         speaker.Clear()
-        if speakerLocked { speaker.Lock() }
+        if isSpeakerLocked && isSpeakerInited { speaker.Lock() }
       }
     }
   }

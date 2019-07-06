@@ -1,3 +1,3 @@
 #!/bin/bash
 
-./scripts/build.sh && ./scripts/run.sh
+./scripts/build.sh && ./scripts/run.sh "$@"

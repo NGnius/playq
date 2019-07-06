@@ -2,33 +2,69 @@ package main
 
 import (
     "fmt"
-    // "flag"
+    "flag"
     "./controller"
     "./monitor"
     "./playback"
+    //TODO: "./interfaces"
+    "time"
 )
 
 var ABOUT_STRING string = `playq v0.0.1 for streamq
 Developed by NGnius (Graham)`
 
+// command line flag arguments
+var autostart bool
+var queueCode string
+var queueCreate bool
+var bufferTime time.Duration
+
+func init() {
+  const (
+    usageAutostart = "Automatically start audio playback. Otherwise, a 'play' command must be sent to start playback."
+    usageQueueCode = "Queue code to use for playback. This is used for adding and getting songs to play."
+    usageQueueCodeShort = "queue (shorthand)"
+    usageQueueCreate = "Create a new queue instead of using a pre-existing one. The queue code will be chosen by the server, not '-queue'."
+    usageBufferTime = "Audio time to buffer. Shorter times reduce errors but increase lag."
+  )
+  flag.BoolVar(&autostart, "auto", false, usageAutostart)
+  flag.StringVar(&queueCode, "queue", "A", usageQueueCode)
+  flag.StringVar(&queueCode, "q", "A", usageQueueCodeShort)
+  flag.BoolVar(&queueCreate, "create", false, usageQueueCreate)
+  flag.DurationVar(&bufferTime, "buffer", time.Second/100, usageBufferTime)
+}
+
 func main() {
+  var cli controller.CommandLineInterface
+  var mon monitor.Monitor
+  var player playback.Playback
+
+  flag.Parse()
   fmt.Println(ABOUT_STRING)
   // create CLI
-  cli := controller.NewCLI()
+  cli = controller.NewCLI()
   cli_complete := make(chan int)
 
   // create monitor
-  mon := monitor.New("A")
+  if queueCreate {
+    mon = monitor.NewAndCreateQueue()
+  } else {
+    mon = monitor.NewAndRetrieveQueue(queueCode)
+  }
   cli.MonitorControlChannel = mon.ControlChannel
   cli.MonitorEventChannel = mon.EventChannel
   monitor_complete := make(chan int)
 
   // create player
-  player := playback.New()
+  player = playback.New()
   mon.PlaybackControlChannel = player.ControlChannel
   mon.PlaybackFileChannel = player.FileChannel
   mon.PlaybackEventChannel = player.EventChannel
   playback_complete := make(chan int)
+
+  // command line actions
+  mon.IsAutostart = autostart
+  player.BufferedTime = bufferTime
 
   // start components
   cli.Start(cli_complete)
