@@ -1,7 +1,7 @@
 package playback
 
 import (
-    "fmt"
+    //"fmt"
     "github.com/faiface/beep"
     "github.com/faiface/beep/speaker"
     "github.com/faiface/beep/mp3"
@@ -15,13 +15,15 @@ import (
 type Playback struct {
   filename string
   currentStream beep.Streamer
+  currentFormat beep.SampleRate
+  isSpeakerInited bool
   FileChannel chan *os.File
   EventChannel chan string
   ControlChannel chan string
 }
 
 func New() Playback{
-  return Playback{FileChannel:make(chan *os.File, 1), EventChannel:make(chan string, 2), ControlChannel:make(chan string)}
+  return Playback{FileChannel:make(chan *os.File, 1), EventChannel:make(chan string, 2), ControlChannel:make(chan string), isSpeakerInited:false}
 }
 
 func (p Playback) Start(end chan int) {
@@ -29,7 +31,7 @@ func (p Playback) Start(end chan int) {
 }
 
 func (p Playback) Run(end chan int) {
-  speakerPaused := false
+  speakerLocked := false
   songDone := make(chan bool, 1)
   playLoop: for {
     select {
@@ -37,10 +39,17 @@ func (p Playback) Run(end chan int) {
       p.EventChannel <- "next"
       nextStream, nextFormat, nextErr := decodeAudioFile( <- p.FileChannel)
       if nextErr == nil {
-        speaker.Clear()
         p.currentStream = nextStream
-        speaker.Init(nextFormat.SampleRate, nextFormat.SampleRate.N(time.Second/10))
+        if !p.isSpeakerInited /*|| nextFormat.SampleRate != p.currentFormat*/ {
+          speaker.Init(nextFormat.SampleRate, nextFormat.SampleRate.N(time.Second/100))
+          p.currentFormat = nextFormat.SampleRate
+          p.isSpeakerInited = true
+        } else {
+          if speakerLocked { speaker.Unlock() }
+          speaker.Clear()
+        }
         speaker.Play(beep.Seq(nextStream, beep.Callback(func(){songDone <- true})))
+        if speakerLocked { speaker.Lock() }
       } else {
         p.EventChannel <- "badfile"
       }
@@ -49,31 +58,35 @@ func (p Playback) Run(end chan int) {
       case "next":
         songDone <- false
       case "toggle":
-        if speakerPaused {
+        if speakerLocked {
           speaker.Unlock()
         } else {
           speaker.Lock()
         }
-        speakerPaused = !speakerPaused
+        speakerLocked = !speakerLocked
       case "play":
-        if speakerPaused {
+        if speakerLocked {
           speaker.Unlock()
-          speakerPaused = false
+          speakerLocked = false
         }
       case "pause":
-        if ! speakerPaused {
+        if ! speakerLocked {
           speaker.Lock()
-          speakerPaused = true
+          speakerLocked = true
         }
       case "end", "stop", "close":
-        if speakerPaused { speaker.Unlock() }
+        if speakerLocked { speaker.Unlock() }
         speaker.Close()
         p.EventChannel <- "end"
         break playLoop
+      case "clear":
+        if speakerLocked { speaker.Unlock() }
+        speaker.Clear()
+        if speakerLocked { speaker.Lock() }
       }
     }
   }
-  fmt.Println("Playback end")
+  // fmt.Println("Playback end")
   end <- 0
 }
 
@@ -83,6 +96,7 @@ func decodeAudioFile(f *os.File) (beep.Streamer, beep.Format, error) {
   _, readErr := f.Read(b)
   if readErr != nil {
     fmt.Println("Decoding: File may be corrupted?")
+    fmt.Println(b)
   }
   f.Seek(0,0)*/
   // mp3

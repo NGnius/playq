@@ -16,6 +16,7 @@ type Monitor struct {
   ActiveQueue streamqapi.SoundQueue
   discardNextNext bool
   discardNextBadfile bool
+  isCompleted bool
 }
 
 func New(qcode string) Monitor{
@@ -25,7 +26,7 @@ func New(qcode string) Monitor{
     fmt.Println("Monitor may not have started properly due to API error:")
     fmt.Println(apiErr)
   }
-  return Monitor{ActiveQueue:q, EventChannel:make(chan string, 1), ControlChannel:make(chan string), discardNextNext:false, discardNextBadfile:false}
+  return Monitor{ActiveQueue:q, EventChannel:make(chan string, 1), ControlChannel:make(chan string), discardNextNext:false, discardNextBadfile:false, isCompleted:false}
 }
 
 func (m Monitor) Start(end chan int) {
@@ -34,18 +35,16 @@ func (m Monitor) Start(end chan int) {
 
 func (m Monitor) Run(end chan int) {
   // start up duties
-  m.discardNextNext = true
   switch m.ActiveQueue.Index {
   case -1:
+    m.discardNextNext = true
     m.PlaybackControlChannel <- "next"
     m.playNext()
   case len(m.ActiveQueue.Items):
-    fmt.Println("Queue is already complete, Monitor did not start")
-    m.PlaybackControlChannel <- "end"
-    m.EventChannel <- "end"
-    end <- 1
-    return
+    fmt.Println("Queue is already complete, audio did not start")
+    m.isCompleted = true
   default:
+    m.discardNextNext = true
     m.PlaybackControlChannel <- "next"
     m.playCurrent()
   }
@@ -72,7 +71,18 @@ func (m Monitor) Run(end chan int) {
         } else {
           failed := false
           addLoop: for _, elem := range fileArgs[1:] {
-            _, addErr := m.ActiveQueue.AddFilePath(elem)
+            var addErr error
+            if strings.Contains(elem, "/") {
+              // add by (local) file path
+              _, addErr = m.ActiveQueue.AddFilePath(elem)
+            } else {
+              // add by sound ID
+              var s streamqapi.Sound
+              s, addErr = streamqapi.NewSound(elem)
+              if addErr == nil {
+                addErr = m.ActiveQueue.Add(s)
+              }
+            }
             if addErr != nil {
               fmt.Println(addErr)
               m.EventChannel <- "Failed at "+elem
@@ -81,13 +91,17 @@ func (m Monitor) Run(end chan int) {
             }
           }
           if !failed {
-            fmt.Print("Added ")
-            fmt.Print((len(fileArgs)-1))
-            m.EventChannel <- " file(s)"
+            if m.isCompleted {
+              m.isCompleted = false
+              m.discardNextNext = true
+              m.PlaybackControlChannel <- "next"
+              m.playCurrent()
+            }
+            m.EventChannel <- ""
           }
         }
       case "pause", "play", "toggle":
-        // commands which only involve the player
+        // commands which only involve playback
         m.PlaybackControlChannel <- args[0]
         m.EventChannel <- ""
       default:
@@ -119,7 +133,7 @@ func (m Monitor) Run(end chan int) {
 
     }
   }
-  fmt.Println("Monitor end")
+  // fmt.Println("Monitor end")
   end <- 0
 }
 
@@ -133,9 +147,9 @@ func (m *Monitor) playNext() {
   if nextErr != nil {
     dummyFile, _ := os.Open("dummy")
     m.discardNextBadfile = true
+    m.isCompleted = true
     m.PlaybackFileChannel <- dummyFile
-    m.PlaybackControlChannel <- "end"
-    //fmt.Println("Queue completed")
+    m.PlaybackControlChannel <- "clear"
     return
   }
   m.play(nextSound)

@@ -7,7 +7,7 @@ import (
   "strings"
 )
 
-var cli_prompt string = "cli@controller $ "
+var cli_prompt string = "cli@playq $ "
 
 var Commands []string = []string{"pause", "play", "next", "toggle", "add"}
 
@@ -77,7 +77,7 @@ func (c CommandLineInterface) Run(end chan int) {
       }
     }
   }
-  fmt.Println("Controller end")
+  // fmt.Println("Controller end")
   end <- 0
 }
 

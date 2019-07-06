@@ -2,6 +2,8 @@ package streamqapi
 
 import (
   "os"
+  "io/ioutil"
+  "fmt"
 )
 
 // start of Sound object
@@ -153,6 +155,14 @@ func (sq *SoundQueue) Add(s Sound) (error) {
   Create new sound, upload file and add to queue compound method
 */
 func (sq *SoundQueue) AddFile(file *os.File) (Sound, error) {
+  // read data for caching
+  file.Seek(0,0)
+  data, readErr := ioutil.ReadAll(file)
+  if readErr != nil {
+    fmt.Println(readErr)
+  }
+  file.Seek(0,0)
+  // API-side creation
   nSound, nSoundErr := CreateSound()
   if nSoundErr != nil {
     return nSound, nSoundErr
@@ -165,6 +175,12 @@ func (sq *SoundQueue) AddFile(file *os.File) (Sound, error) {
   if rSoundErr != nil {
     return nSound, rSoundErr
   }
+  // cache audio file
+  soundPath := cachedir+"/"+nSound.Code
+  soundFile, _ := os.Create(soundPath)
+  soundFile.Write(data)
+  soundFile.Sync()
+  soundFile.Close()
   return nSound, sq.Add(nSound)
 }
 
@@ -177,6 +193,7 @@ func (sq *SoundQueue) AddFilePath(path string) (Sound, error) {
   if fileErr != nil {
     return nSound, fileErr
   }
+  file.Close()
   if aSoundErr != nil {
     return nSound, aSoundErr
   }

@@ -6,4 +6,4 @@ before_install:
   - sudo apt update
   - sudo apt install -y libasound2-dev
 install: sh ./scripts/build-deps.sh
-script: sh ./scripts/build-all.sh
+script: sh ./scripts/build.sh
