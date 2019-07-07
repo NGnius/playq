@@ -1,17 +1,17 @@
 package streamqapi
 
 import (
+  "fmt"
   "os"
   "io/ioutil"
-  "fmt"
 )
 
 // start of Sound object
 
 type Sound struct {
-  Code string `json:code`
-  Id int `json:id`
-  Metadata map[string]string `json:metadata`
+  Code string `json:"code"`
+  Id int `json:"id"`
+  Metadata map[string]string `json:"metadata"`
 }
 
 /*
@@ -68,10 +68,13 @@ func (sound Sound) GetFile() *os.File {
 // start of SoundQueue object
 
 type SoundQueue struct {
-  Code string `json:code`
-  Id int `json:id`
-  Items []Sound `json:items`
-  Index int `json:index`
+  Code string `json:"code"`
+  Id int `json:"id"`
+  Index int `json:"index"`
+  Items []Sound `json:"items"`
+  RepeatAll bool `json:"repeat-all"`
+  RepeatOne bool `json:"repeat-one"`
+  IsShuffle bool `json:"shuffle"`
 }
 
 /*
@@ -93,6 +96,9 @@ func CreateSoundQueue() (SoundQueue, error) {
 func (sq *SoundQueue) update(updatedSq SoundQueue) {
   sq.Index = updatedSq.Index
   sq.Items = updatedSq.Items
+  sq.RepeatAll = updatedSq.RepeatAll
+  sq.RepeatOne = updatedSq.RepeatOne
+  sq.IsShuffle = updatedSq.IsShuffle
 }
 
 /*
@@ -198,6 +204,27 @@ func (sq *SoundQueue) AddFilePath(path string) (Sound, error) {
     return nSound, aSoundErr
   }
   return nSound, nil
+}
+
+/*
+  Set shuffle queue mode to -1, 0 or 1 (off, toggle or on, respectively)
+*/
+func (sq *SoundQueue) Shuffle(mode int) (error) {
+  var nQ SoundQueue
+  var apiErr error
+  switch mode {
+  case -1:
+    nQ, apiErr = api.queueShuffle(sq.Code, false)
+  case 1:
+    nQ, apiErr = api.queueShuffle(sq.Code, true)
+  case 0:
+    nQ, apiErr = api.queueShuffle(sq.Code, !sq.IsShuffle)
+  }
+  if apiErr != nil {
+    return apiErr
+  }
+  sq.update(nQ)
+  return nil
 }
 
 // end of Queue object

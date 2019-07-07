@@ -5,11 +5,12 @@ import (
   "bufio"
   "fmt"
   "strings"
+  "path/filepath"
 )
 
 var cli_prompt string = "cli@playq $ "
 
-var Commands []string = []string{"pause", "play", "next", "toggle", "add"}
+var Commands []string = []string{"pause", "play", "next", "toggle", "shuffle"}
 
 type CommandLineInterface struct {
   MonitorControlChannel chan string
@@ -54,12 +55,15 @@ func (c CommandLineInterface) Run(end chan int) {
           fmt.Println("Usage: prompt NEW_PROMPT")
         }
       case "add":
-        msg := "add \n"
-        msg += strings.Trim(text[4:], " ")
-        c.sendAndPrintResp(msg)
+        msg, ok := buildAddMessage(text)
+        if !ok {
+          fmt.Println("Invalid directory/file path")
+        } else {
+          c.sendAndPrintResp(msg)
+        }
       case "help":
         fmt.Println("Commands: "+strings.Join(Commands, ", "))
-        fmt.Println("Extra commands: test, end, prompt, help")
+        fmt.Println("Extra commands: add, end, prompt, help")
       // commands with monitor-only functionality
       case func(candidate string) string {
         // if args[0] in Commands, it's a match
@@ -87,4 +91,52 @@ func (c CommandLineInterface) sendAndPrintResp(msg string){
   if resp != "" {
     fmt.Println(resp)
   }
+}
+
+func buildAddMessage(command string) (string, bool) {
+  msg := "add \n"
+  path := strings.Trim(command[4:], " ")
+  pathInfo, statErr := os.Stat(path)
+  if statErr != nil {
+    // assume path is actually sound code
+    return msg+path, true
+  }
+  if pathInfo.IsDir() {
+    filepaths := getFilesInDirRecurse(path)
+    for _, elem := range filepaths {
+      msg += elem+"\n"
+    }
+    msg = msg[:len(msg)-1]
+    return msg, true
+  } else {
+    msg += path
+    return msg, true
+  }
+}
+
+func getFilesInDirRecurse(dirpath string) []string {
+  // recursively find files
+  var files []string
+  dir, dirErr := os.Open(dirpath)
+  if dirErr != nil {
+    return files
+  }
+  paths, readErr := dir.Readdirnames(0)
+  if readErr != nil {
+    return files
+  }
+  for _, path := range paths {
+    fullpath := filepath.Join(dirpath, path)
+    info, statErr := os.Stat(fullpath)
+    if statErr == nil { // ignore errored pathes
+      if info.IsDir() {
+        files = append(files, getFilesInDirRecurse(fullpath)...)
+      } else {
+        files = append(files, fullpath)
+      }
+    } else {
+      fmt.Println(statErr)
+    }
+  }
+  return files
 }

@@ -1,6 +1,7 @@
 package streamqapi
 
 import (
+  //"fmt"
   "net/http"
   "io/ioutil"
   "encoding/json"
@@ -23,6 +24,7 @@ var queueNextUrl string = "/api/queue/next"
 var queuePreviousUrl string = "/api/queue/previous"
 var queueNowUrl string = "/api/queue/now"
 var queueAddUrl string = "/api/queue/add"
+var queueShuffleUrl string = "/api/queue/shuffle"
 
 // start of API object
 
@@ -170,6 +172,25 @@ func (this API) queueNow(code string) (Sound, error) {
 func (this API) queueAdd(code string, soundCode string) (SoundQueue, error) {
   var q SoundQueue
   body, respErr := this._getBytes(this.Base+queueAddUrl+"?code="+code+"&sound-code="+soundCode)
+  if respErr != nil {
+    return q, respErr
+  }
+  unmarsharlErr := json.Unmarshal(body, &q)
+  if unmarsharlErr != nil {
+    return q, unmarsharlErr
+  }
+  return q, nil
+}
+
+func (this API) queueShuffle(code string, mode bool) (SoundQueue, error){
+  var q SoundQueue
+  var modeStr string
+  if mode {
+    modeStr = "t"
+  } else {
+    modeStr = "f"
+  }
+  body, respErr := this._getBytes(this.Base+queueShuffleUrl+"?code="+code+"&mode="+modeStr)
   if respErr != nil {
     return q, respErr
   }
