@@ -117,6 +117,25 @@ func (sq SoundQueue) Now() (Sound) {
 }
 
 /*
+  Calculates the next index, factoring in repeat
+*/
+func (sq SoundQueue) nextIndex() (int) {
+  if sq.RepeatOne {
+    // index stays the same
+    return sq.Index
+  } else if sq.RepeatAll {
+    // rollover if at end of queue
+    if sq.Index+1 >= len(sq.Items) {
+      return 0
+    } else {
+      return sq.Index+1
+    }
+  } else {
+    return sq.Index+1
+  }
+}
+
+/*
   Get next song from API server
   If local next is not the same as the API's next, the queue is resynced
 */
@@ -125,8 +144,8 @@ func (sq *SoundQueue) GetNext() (Sound, error) {
   if apiErr != nil {
     return nextSound, apiErr
   }
-  sq.Index++
-  if sq.Now().Code != nextSound.Code {
+  sq.Index = sq.nextIndex()
+  if sq.Index >= len(sq.Items) || sq.Now().Code != nextSound.Code {
     // resync queue
     updatedQueue, apiErr := api.getQueue(sq.Code)
     if apiErr != nil {
@@ -141,7 +160,7 @@ func (sq *SoundQueue) GetNext() (Sound, error) {
   Next song, without API sync/calls
 */
 func (sq *SoundQueue) Next() (Sound) {
-  sq.Index++
+  sq.Index = sq.nextIndex()
   return sq.Now()
 }
 
@@ -219,6 +238,27 @@ func (sq *SoundQueue) Shuffle(mode int) (error) {
     nQ, apiErr = api.queueShuffle(sq.Code, true)
   case 0:
     nQ, apiErr = api.queueShuffle(sq.Code, !sq.IsShuffle)
+  }
+  if apiErr != nil {
+    return apiErr
+  }
+  sq.update(nQ)
+  return nil
+}
+
+/*
+  Set repeat queue mode to 0, 1 or 2 (off, repeat one or repeat all, respectively)
+*/
+func (sq *SoundQueue) Repeat(mode int) (error) {
+  var nQ SoundQueue
+  var apiErr error
+  switch mode {
+  case 0:
+    nQ, apiErr = api.queueRepeatNone(sq.Code)
+  case 1:
+    nQ, apiErr = api.queueRepeatOne(sq.Code)
+  case 2:
+    nQ, apiErr = api.queueRepeatAll(sq.Code)
   }
   if apiErr != nil {
     return apiErr

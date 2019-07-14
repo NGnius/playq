@@ -10,7 +10,7 @@ import (
 
 var cli_prompt string = "cli@playq $ "
 
-var Commands []string = []string{"pause", "play", "next", "toggle", "shuffle"}
+var Commands []string = []string{"pause", "play", "next", "toggle", "shuffle", "info", "repeat"}
 
 type CommandLineInterface struct {
   MonitorControlChannel chan string

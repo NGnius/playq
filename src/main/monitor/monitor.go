@@ -24,18 +24,27 @@ func New(q streamqapi.SoundQueue) Monitor {
   return Monitor{ActiveQueue:q, EventChannel:make(chan string, 1), ControlChannel:make(chan string), IsAutostart:false,discardNextNext:false, discardNextBadfile:false, isCompleted:false}
 }
 
-func NewAndRetrieveQueue(qcode string) Monitor {
-  streamqapi.InitAPI("http://localhost:5000")
+func NewAndRetrieveQueue(qcode string, api string) Monitor {
+  if streamqapi.IsAPIInited {
+    fmt.Println("API has already been initialised, unexpected behaviour may occur")
+  }
+  streamqapi.InitAPI(api)
   q, apiErr := streamqapi.NewSoundQueue(qcode)
   if apiErr != nil {
     fmt.Println("Monitor may not have started properly due to API error:")
     fmt.Println(apiErr)
+  } else {
+    fmt.Print("Connected to existing queue with code ")
+    fmt.Println(q.Code)
   }
   return New(q)
 }
 
-func NewAndCreateQueue() Monitor {
-  streamqapi.InitAPI("http://localhost:5000")
+func NewAndCreateQueue(api string) Monitor {
+  if streamqapi.IsAPIInited {
+    fmt.Println("API has already been initialised, unexpected behaviour may occur")
+  }
+  streamqapi.InitAPI(api)
   q, apiErr := streamqapi.CreateSoundQueue()
   if apiErr != nil {
     fmt.Println("Monitor may not have started properly due to API error:")
@@ -62,6 +71,9 @@ func (m Monitor) Run(end chan int) {
       case "end", "shutdown":
         // send terminate signal to player
         m.PlaybackControlChannel <- "end"
+      case "info":
+        printSoundInfo(m.ActiveQueue.Now())
+        m.EventChannel <- ""
       case "next", "skip":
         m.controlNext()
         // mostly API-based controls
@@ -69,11 +81,8 @@ func (m Monitor) Run(end chan int) {
         m.controlAdd(msg, args)
       case "shuffle":
         m.controlShuffle(msg, args)
-        // WIP
-      /*case "repeat-all":
-        m.controlRepeatAll()
-      case "repeat-one":
-        m.controlRepeatOne()*/
+      case "repeat":
+        m.controlRepeat(msg, args)
       case "pause", "play", "toggle":
         // commands which only involve playback
         m.PlaybackControlChannel <- args[0]
@@ -130,7 +139,11 @@ func (m *Monitor) playNext() {
 }
 
 func (m Monitor) preloadNext() {
-  if m.ActiveQueue.Index+1 >= len(m.ActiveQueue.Items) {
+  if (m.ActiveQueue.Index+1 >= len(m.ActiveQueue.Items) && !m.ActiveQueue.RepeatAll) || m.ActiveQueue.RepeatOne {
+    return
+  } else if m.ActiveQueue.RepeatAll {
+    probableNextSound := m.ActiveQueue.Items[0]
+    probableNextSound.GetFile().Close()
     return
   }
   probableNextSound := m.ActiveQueue.Items[m.ActiveQueue.Index+1]
@@ -234,49 +247,36 @@ func (m *Monitor) controlShuffle(_ string, args []string) {
   m.EventChannel <- resp
 }
 
-/* WIP
-func (m Monitor) controlRepeatAll(_ string, args []string) {
-  resp = ""
-  if len(args) == 1 || args[1] == "toggle" {
-    err := m.ActiveQueue.RepeatAll()
-    if err != nil {
-      resp = "Repeat All toggle failed"
-    }
-  } else if args[1] == "off" {
-    err := m.ActiveQueue.RepeatAllDisable()
-    if err != nil {
-      resp = "Repeat All disable failed"
-    }
-  } else if args[1] == "on"{
-    err := m.ActiveQueue.RepeatAllEnable()
-    if err != nil {
-      resp = "Repeat All enable failed"
-    }
+func (m *Monitor) controlRepeat(_ string, args []string) {
+  var err error
+  var resp string
+  if len(args) == 1 {
+    err = m.ActiveQueue.Repeat(2)
   } else {
-    resp = "Unrecognised command format"
+    switch args[1] {
+    case "all", "loop", "on":
+      err = m.ActiveQueue.Repeat(2)
+    case "one", "1":
+      err = m.ActiveQueue.Repeat(1)
+    case "none", "off":
+      err = m.ActiveQueue.Repeat(0)
+    }
+  }
+  if err != nil {
+    resp = "Repeat action failed"
+  } else {
+    resp = ""
   }
   m.EventChannel <- resp
 }
 
-func (m Monitor) controlRepeatOne(_ string, args []string) {
-  resp = ""
-  if len(args) == 1 || args[1] == "toggle" {
-    err := m.ActiveQueue.RepeatOne()
-    if err != nil {
-      resp = "Repeat One toggle failed"
+func printSoundInfo(sound streamqapi.Sound) {
+  var displayedFields []string = []string{"title", "album", "artist"} //, "format", "tracknumber"}
+  for _, field := range displayedFields {
+    value := sound.Metadata[field]
+    if value == "" {
+      value = "???"
     }
-  } else if args[1] == "off" {
-    err := m.ActiveQueue.RepeatOneDisable()
-    if err != nil {
-      resp = "Repeat One disable failed"
-    }
-  } else if args[1] == "on"{
-    err := m.ActiveQueue.RepeatOneEnable()
-    if err != nil {
-      resp = "Repeat One enable failed"
-    }
-  } else {
-    resp = "Unrecognised command format"
+    fmt.Println(field+": "+value)
   }
-  m.EventChannel <- resp
-}*/
+}

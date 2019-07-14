@@ -18,20 +18,23 @@ var autostart bool
 var queueCode string
 var queueCreate bool
 var bufferTime time.Duration
+var apiBase string
 
 func init() {
   const (
     usageAutostart = "Automatically start audio playback. Otherwise, a 'play' command must be sent to start playback."
     usageQueueCode = "Queue code to use for playback. This is used for adding and getting songs to play."
     usageQueueCodeShort = "queue (shorthand)"
-    usageQueueCreate = "Create a new queue instead of using a pre-existing one. The queue code will be chosen by the server, not '-queue'."
+    usageQueueCreate = "Create a new queue instead of using a pre-existing one. The queue code will be chosen by the server, not '--queue'."
     usageBufferTime = "Audio time to buffer. Shorter times reduce errors but increase lag."
+    usageApiBase = "Base url address to API endpoint. Connection method (http:// or https://) must be included."
   )
   flag.BoolVar(&autostart, "auto", false, usageAutostart)
   flag.StringVar(&queueCode, "queue", "A", usageQueueCode)
   flag.StringVar(&queueCode, "q", "A", usageQueueCodeShort)
   flag.BoolVar(&queueCreate, "create", false, usageQueueCreate)
   flag.DurationVar(&bufferTime, "buffer", time.Second/100, usageBufferTime)
+  flag.StringVar(&apiBase, "url", "http://localhost:5000", usageApiBase)
 }
 
 func main() {
@@ -47,9 +50,9 @@ func main() {
 
   // create monitor
   if queueCreate {
-    mon = monitor.NewAndCreateQueue()
+    mon = monitor.NewAndCreateQueue(apiBase)
   } else {
-    mon = monitor.NewAndRetrieveQueue(queueCode)
+    mon = monitor.NewAndRetrieveQueue(queueCode, apiBase)
   }
   cli.MonitorControlChannel = mon.ControlChannel
   cli.MonitorEventChannel = mon.EventChannel

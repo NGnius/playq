@@ -7,9 +7,11 @@ import (
   "encoding/json"
   "errors"
   "io"
+  //"os"
 )
 
 var cachedir string = "./temp"//os.TempDir()
+var IsAPIInited bool = false
 var api API
 
 // api endpoints
@@ -25,6 +27,7 @@ var queuePreviousUrl string = "/api/queue/previous"
 var queueNowUrl string = "/api/queue/now"
 var queueAddUrl string = "/api/queue/add"
 var queueShuffleUrl string = "/api/queue/shuffle"
+var queueRepeatUrl string = "/api/queue/repeat"
 
 // start of API object
 
@@ -182,7 +185,7 @@ func (this API) queueAdd(code string, soundCode string) (SoundQueue, error) {
   return q, nil
 }
 
-func (this API) queueShuffle(code string, mode bool) (SoundQueue, error){
+func (this API) queueShuffle(code string, mode bool) (SoundQueue, error) {
   var q SoundQueue
   var modeStr string
   if mode {
@@ -201,8 +204,48 @@ func (this API) queueShuffle(code string, mode bool) (SoundQueue, error){
   return q, nil
 }
 
+func (this API) queueRepeatNone(code string) (SoundQueue, error) {
+  var q SoundQueue
+  body, respErr := this._getBytes(this.Base+queueRepeatUrl+"?code="+code+"&mode=none")
+  if respErr != nil {
+    return q, respErr
+  }
+  unmarsharlErr := json.Unmarshal(body, &q)
+  if unmarsharlErr != nil {
+    return q, unmarsharlErr
+  }
+  return q, nil
+}
+
+func (this API) queueRepeatOne(code string) (SoundQueue, error) {
+  var q SoundQueue
+  body, respErr := this._getBytes(this.Base+queueRepeatUrl+"?code="+code+"&mode=one")
+  if respErr != nil {
+    return q, respErr
+  }
+  unmarsharlErr := json.Unmarshal(body, &q)
+  if unmarsharlErr != nil {
+    return q, unmarsharlErr
+  }
+  return q, nil
+}
+
+func (this API) queueRepeatAll(code string) (SoundQueue, error) {
+  var q SoundQueue
+  body, respErr := this._getBytes(this.Base+queueRepeatUrl+"?code="+code+"&mode=all")
+  if respErr != nil {
+    return q, respErr
+  }
+  unmarsharlErr := json.Unmarshal(body, &q)
+  if unmarsharlErr != nil {
+    return q, unmarsharlErr
+  }
+  return q, nil
+}
+
 // end of API object
 
 func InitAPI(baseUrl string){
   api = API{Base:baseUrl/*, client:http.Client()*/}
+  IsAPIInited = true
 }
