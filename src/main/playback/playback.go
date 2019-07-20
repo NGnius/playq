@@ -10,6 +10,7 @@ import (
     "github.com/faiface/beep/vorbis"
     "time"
     "os"
+    "bytes"
 )
 
 type Playback struct {
@@ -96,38 +97,71 @@ func (p Playback) Run(end chan int) {
   end <- 0
 }
 
+func detectFormat(f *os.File) (string, error) {
+  // hacky implementation to detect audio format
+  var b []byte = []byte{0,0,0,0,0,0,0,0,0,0,0,0} // len 12
+  _, readErr := f.Read(b)
+  f.Seek(0,0)
+  if readErr != nil {
+    return "", readErr
+  }
+  if bytes.Compare(b[0:4], []byte{102, 76, 97, 67}) == 0 { // spells fLaC
+    //fmt.Println("flac")
+    return "flac", nil
+  }
+  if bytes.Compare(b[0:2], []byte{73, 68}) == 0 {
+    //fmt.Println("mp3")
+    return "mp3", nil
+  }
+  if bytes.Compare(b[0:4], []byte{82, 73, 70, 70}) == 0 && bytes.Compare(b[8:12], []byte{87, 65, 86, 69}) == 0{ // spells RIFF and WAVE respectively
+    //fmt.Println("wav")
+    return "wav", nil
+  }
+  f.Seek(29,0)
+  f.Read(b)
+  if bytes.Compare(b[0:6], []byte{118, 111, 114, 98, 105, 115}) == 0 { // spells vorbis
+    //fmt.Println("vorbis")
+    return "vorbis", nil
+  }
+  //fmt.Println(b)
+  //fmt.Println("No format detected")
+  return "", nil
+}
+
 func decodeAudioFile(f *os.File) (beep.Streamer, beep.Format, error) {
   // try all known audio formats, return when no error occurs
-  /*var b []byte = []byte{0,}
-  _, readErr := f.Read(b)
-  if readErr != nil {
-    fmt.Println("Decoding: File may be corrupted?")
-    fmt.Println(b)
+  var streamer beep.Streamer
+  var format beep.Format
+  var decodeErr error
+  audioFormat, formatErr := detectFormat(f)
+  if formatErr != nil {
+    return streamer, format, formatErr
   }
-  f.Seek(0,0)*/
-  // mp3
-  streamer, format, decodeErr := mp3.Decode(f)
-  if decodeErr == nil {
-    //fmt.Println("Decoded as mp3")
-    return streamer, format, nil
-  }
-  // wav
-  streamer, format, decodeErr = wav.Decode(f)
-  if decodeErr == nil {
-    //fmt.Println("Decoded as wav")
-    return streamer, format, nil
-  }
-  // flac
-  streamer, format, decodeErr = flac.Decode(f)
-  if decodeErr == nil {
-    //fmt.Println("Decoded as flac")
-    return streamer, format, nil
-  }
-  // vorbis
-  streamer, format, decodeErr = vorbis.Decode(f)
-  if decodeErr == nil {
-    //fmt.Println("Decoded as vorbis")
-    return streamer, format, nil
+  switch audioFormat {
+  case "mp3":
+    streamer, format, decodeErr = mp3.Decode(f)
+    if decodeErr == nil {
+      //fmt.Println("Decoded as mp3")
+      return streamer, format, nil
+    }
+  case "wav":
+    streamer, format, decodeErr = wav.Decode(f)
+    if decodeErr == nil {
+      //fmt.Println("Decoded as wav")
+      return streamer, format, nil
+    }
+  case "flac":
+    streamer, format, decodeErr = flac.Decode(f)
+    if decodeErr == nil {
+      //fmt.Println("Decoded as flac")
+      return streamer, format, nil
+    }
+  case "vorbis":
+    streamer, format, decodeErr = vorbis.Decode(f)
+    if decodeErr == nil {
+      //fmt.Println("Decoded as vorbis")
+      return streamer, format, nil
+    }
   }
   return streamer, format, decodeErr
 }
